@@ -11,7 +11,6 @@ Until I get around to writing some docs and examples, the tests at the foot of
 this module should serve to get you started.
 '''
 
-import array
 import ctypes
 import os
 import struct
@@ -251,7 +250,7 @@ def activateMenuItem(hWnd, menuItemPath):
     hMenu = getTopMenu(hWnd)
 
     # Get top level menu's item count. Is there a better way to do this?
-    for hMenuItemCount in xrange(256):
+    for hMenuItemCount in range(256):
         try:
             getMenuInfo(hMenu, hMenuItemCount)
         except WinGuiAutoError:
@@ -335,12 +334,13 @@ def getMenuInfo(hMenu, uIDItem):
     # ... there are more, but these are the ones I'm interested in
 
     # Menu name
-    menuName = ctypes.c_buffer("\000" * 32)
+    menuName = ctypes.create_string_buffer(32)
     ctypes.windll.user32.GetMenuStringA(ctypes.c_int(hMenu),
                                         ctypes.c_int(uIDItem),
                                         menuName, ctypes.c_int(len(menuName)),
                                         win32con.MF_BYPOSITION)
-    menuInfo.name = menuName.value
+    # Added .decode('utf-8')
+    menuInfo.name = menuName.value.decode('utf-8')
 
     # Sub menu info
     menuInfo.itemCount = menuState >> 8
@@ -538,19 +538,17 @@ def _getMultipleWindowValues(hwnd, getCountMessage, getValueMessage):
     Returns:            Retrieved items.'''
     result = []
 
-    VALUE_LENGTH = 256
-    bufferlength_int  = struct.pack('i', VALUE_LENGTH) # This is a C style int.
+    BUFFER_SIZE = 256
+    buf = win32gui.PyMakeBuffer(BUFFER_SIZE)
 
     valuecount = win32gui.SendMessage(hwnd, getCountMessage, 0, 0)
     for itemIndex in range(valuecount):
-        valuebuffer = array.array('c',
-                                  bufferlength_int +
-                                  " " * (VALUE_LENGTH - len(bufferlength_int)))
-        valueLength = win32gui.SendMessage(hwnd,
-                                           getValueMessage,
-                                           itemIndex,
-                                           valuebuffer)
-        result.append(valuebuffer.tostring()[:valueLength])
+        buf_len = win32gui.SendMessage(
+            hwnd, getValueMessage, itemIndex, buf)
+        result.append(
+            win32gui.PyGetString(
+                win32gui.PyGetBufferAddressAndLen(buf)[0], buf_len))
+
     return result
 
 def _windowEnumerationHandler(hwnd, resultList):
@@ -607,7 +605,7 @@ class Bunch(object):
     def __str__(self):
         state = ["%s=%r" % (attribute, value)
                  for (attribute, value)
-                 in self.__dict__.items()]
+                 in list(self.__dict__.items())]
         return '\n'.join(state)
 
 class WinGuiAutoError(Exception):
@@ -620,18 +618,18 @@ if __name__ == '__main__':
 
     # NT/2K/XP notepads have a different menu stuctures.
     win_version = {4: "NT", 5: "2K", 6: "XP"}[os.sys.getwindowsversion()[0]]
-    print "win_version=", win_version
+    print("win_version=", win_version)
 
     import pprint
     import random
     import time
 
-    print "Open and locate Notepad"
+    print("Open and locate Notepad")
     os.startfile('notepad')
     time.sleep(.5)
     notepadWindow = findTopWindow(wantedClass='Notepad')
 
-    print "Open and locate the 'replace' dialogue"
+    print("Open and locate the 'replace' dialogue")
     if win_version in ["NT"]:
         activateMenuItem(notepadWindow, ['search', 'replace'])
     elif win_version in ["2K", "XP"]:
@@ -639,20 +637,20 @@ if __name__ == '__main__':
     time.sleep(.5)
     replaceDialog = findTopWindow(wantedText='Replace')
 
-    print "Locate the 'find' edit box"
+    print("Locate the 'find' edit box")
     findValue = findControl(replaceDialog, wantedClass="Edit")
 
-    print "Enter some text - and wait long enough for it to be seen"
+    print("Enter some text - and wait long enough for it to be seen")
     setEditText(findValue, "Hello, mate!")
     time.sleep(.5)
 
-    print "Locate the 'cancel' button, and click it."
+    print("Locate the 'cancel' button, and click it.")
     cancelButton = findControl(replaceDialog,
                                wantedClass="Button",
                                wantedText="Cancel")
     clickButton(cancelButton)
 
-    print "Open and locate the 'font' dialogue"
+    print("Open and locate the 'font' dialogue")
     if win_version in ["NT"]:
         activateMenuItem(notepadWindow, ['edit', 'set font'])
     elif win_version in ["2K", "XP"]:
@@ -660,26 +658,26 @@ if __name__ == '__main__':
     time.sleep(.5)
     fontDialog = findTopWindow(wantedText='Font')
 
-    print "Let's see if dumping works. Dump the 'font' dialogue contents:"
+    print("Let's see if dumping works. Dump the 'font' dialogue contents:")
     pprint.pprint(dumpWindow(fontDialog))
 
-    print "Change the font"
+    print("Change the font")
     fontCombos = findControls(fontDialog, wantedClass="ComboBox")
-    print "Find the font selection combo"
+    print("Find the font selection combo")
     for fontCombo in fontCombos:
         fontComboItems = getComboboxItems(fontCombo)
         if 'Arial' in fontComboItems:
             break
 
-    print "Select at random"
+    print("Select at random")
     selectComboboxItem(fontCombo, random.choice(fontComboItems))
     time.sleep(.5)
 
     okButton = findControl(fontDialog, wantedClass="Button", wantedText="OK")
     clickButton(okButton)
 
-    print "Locate notpads edit area, and enter various bits of text."
-    editArea = findControl(notepadWindow,wantedClass="Edit")
+    print("Locate notpads edit area, and enter various bits of text.")
+    editArea = findControl(notepadWindow, wantedClass="Edit")
     setEditText(editArea, "Hello, again!")
     time.sleep(.5)
     setEditText(editArea, "You still there?")
@@ -687,72 +685,72 @@ if __name__ == '__main__':
     setEditText(editArea, ["Here come", "two lines!"])
     time.sleep(.5)
 
-    print "Add some..."
+    print("Add some...")
     setEditText(editArea, ["", "And a 3rd one!"], append=True)
     time.sleep(.5)
 
-    print "See what's there now:"
+    print("See what's there now:")
     pprint.pprint(getEditText(editArea))
 
-    print "Exit notepad"
+    print("Exit notepad")
     activateMenuItem(notepadWindow, ('file', 'exit'))
     time.sleep(.5)
 
-    print "Don't save."
+    print("Don't save.")
     saveDialog = findTopWindow(wantedText='Notepad')
     time.sleep(.5)
-    noButton = findControl(saveDialog,wantedClass="Button", wantedText="no")
+    noButton = findControl(saveDialog, wantedClass="Button", wantedText="no")
     clickButton(noButton)
 
-    print "OK, now we'll have a go with WordPad."
+    print("OK, now we'll have a go with WordPad.")
     os.startfile('wordpad')
     time.sleep(1)
     wordpadWindow = findTopWindow(wantedText='WordPad')
 
-    print "Open and locate the 'new document' dialog."
+    print("Open and locate the 'new document' dialog.")
     activateMenuItem(wordpadWindow, [0, 0])
     time.sleep(.5)
     newDialog = findTopWindow(wantedText='New')
 
-    print "Check you get an exception for non-existent control"
+    print("Check you get an exception for non-existent control")
     try:
         findControl(newDialog, wantedClass="Banana")
         raise Exception("Test failed")
-    except WinGuiAutoError, winGuiAutoError:
-        print "Yup, got: ", str(winGuiAutoError)
+    except WinGuiAutoError as winGuiAutoError:
+        print("Yup, got: ", str(winGuiAutoError))
 
-    print "Locate the 'document type' list box"
+    print("Locate the 'document type' list box")
     docType = findControl(newDialog, wantedClass="ListBox")
     typeListBox = getListboxItems(docType)
-    print "getListboxItems(docType)=", typeListBox
+    print("getListboxItems(docType)=", typeListBox)
 
-    print "Select a type at random"
+    print("Select a type at random")
     selectListboxItem(docType, random.randint(0, len(typeListBox)-1))
     time.sleep(.5)
     clickButton(findControl(newDialog, wantedClass="Button", wantedText="OK"))
 
-    print "Check you get an exception for non-existent menu path"
+    print("Check you get an exception for non-existent menu path")
     try:
         activateMenuItem(wordpadWindow, ('not', 'there'))
         raise Exception("Test failed")
-    except WinGuiAutoError, winGuiAutoError:
-        print "Yup, got: ", str(winGuiAutoError)
+    except WinGuiAutoError as winGuiAutoError:
+        print("Yup, got: ", str(winGuiAutoError))
 
-    print "Check you get an exception for non-existent menu item"
+    print("Check you get an exception for non-existent menu item")
     try:
         activateMenuItem(wordpadWindow, ('file', 'missing'))
         raise Exception("Test failed")
-    except WinGuiAutoError, winGuiAutoError:
-        print "Yup, got: ", str(winGuiAutoError)
+    except WinGuiAutoError as winGuiAutoError:
+        print("Yup, got: ", str(winGuiAutoError))
 
-    print "Exit wordpad"
+    print("Exit wordpad")
     activateMenuItem(wordpadWindow, ('file', 'exit'))
 
-    print "Check you get an exception for non-existent top window"
+    print("Check you get an exception for non-existent top window")
     try:
         findTopWindow(wantedText="Banana")
         raise Exception("Test failed")
-    except WinGuiAutoError, winGuiAutoError:
-        print "Yup, got: ", str(winGuiAutoError)
+    except WinGuiAutoError as winGuiAutoError:
+        print("Yup, got: ", str(winGuiAutoError))
 
-    print "Err, that's it."
+    print("Err, that's it.")
